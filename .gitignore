@@ -1,0 +1,17 @@
+# Dependências (ESSENCIAL)
+/node_modules
+
+# Pasta de Build
+/dist
+
+# Cache do Vite
+.vite/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+.env
+.env.local
