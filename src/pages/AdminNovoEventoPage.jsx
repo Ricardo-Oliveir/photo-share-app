@@ -2,20 +2,13 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// --- NOSSOS NOVOS IMPORTS DO FIREBASE ---
-import { db } from '../firebase.cjs'; // <-- ESTA É A CORREÇÃO
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // Funções para salvar
+import { db } from '../firebase.cjs';
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
-// --- FUNÇÃO HELPER PARA CRIAR O ID (SLUG) ---
+// (A função slugify continua a mesma)
 function slugify(text) {
-  return text
-    .toString()
-    .toLowerCase()
-    .normalize('NFD') // Remove acentos
-    .trim()
-    .replace(/\s+/g, '-') // Substitui espaços por -
-    .replace(/[^\w-]+/g, '') // Remove caracteres não-alfanuméricos
-    .replace(/--+/g, '-'); // Remove hífens duplicados
+  return text.toString().toLowerCase().normalize('NFD').trim()
+    .replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-');
 }
 
 export default function AdminNovoEventoPage() {
@@ -23,14 +16,11 @@ export default function AdminNovoEventoPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // --- A FUNÇÃO DE SALVAR AGORA ESTÁ ATUALIZADA ---
   async function handleSubmit(event) {
     event.preventDefault();
     if (isLoading) return; 
-
     setIsLoading(true);
 
-    // 1. Criar o ID (slug) a partir do nome
     const eventoId = slugify(nomeEvento);
     if (!eventoId) {
       alert("Por favor, digite um nome de evento válido.");
@@ -39,20 +29,18 @@ export default function AdminNovoEventoPage() {
     }
 
     try {
-      // 2. Criar uma referência para o novo documento
       const novoEventoRef = doc(db, "eventos", eventoId);
-
-      // 3. Salvar os dados no Firestore
+      
+      // --- LÓGICA DE SALVAR ATUALIZADA ---
       await setDoc(novoEventoRef, {
         id: eventoId,
         nome: nomeEvento,
-        dataCriacao: serverTimestamp(), // Pega a data/hora do servidor
-        fotos: 0, // Começa com zero fotos
+        dataCriacao: serverTimestamp(),
+        fotos: 0,
+        status: "ativo" // <-- ADICIONAMOS ESTA LINHA
       });
 
       console.log(`Novo evento criado com ID: ${eventoId}`);
-      
-      // 4. Volta para a lista de eventos
       navigate('/admin/eventos');
 
     } catch (error) {
@@ -63,10 +51,10 @@ export default function AdminNovoEventoPage() {
     }
   }
 
+  // O return (JSX) continua o mesmo, não precisa mudar
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Criar Novo Evento</h1>
-
       <form 
         onSubmit={handleSubmit} 
         className="bg-white p-8 rounded-lg shadow-lg max-w-lg"
@@ -87,7 +75,6 @@ export default function AdminNovoEventoPage() {
           />
           <p className="text-xs text-gray-500 mt-1">Este nome será público para os seus convidados.</p>
         </div>
-        
         <div className="flex gap-4">
           <button
             type="submit"

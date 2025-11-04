@@ -4,17 +4,17 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 
 // Importar as páginas
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import AdminLayout from './components/AdminLayout';
-import AdminDashboard from './pages/AdminDashboard';
-import UploadPage from './pages/UploadPage';
-import AdminEventosPage from './pages/AdminEventosPage';
-import AdminNovoEventoPage from './pages/AdminNovoEventoPage';
-
-// --- ESTAS SÃO AS NOVAS PÁGINAS QUE ADICIONAMOS ---
-import RegisterPage from './pages/RegisterPage';
-import AdminClientesPage from './pages/AdminClientesPage';
+import LandingPage from './pages/LandingPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import AdminLayout from './components/AdminLayout.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
+import UploadPage from './pages/UploadPage.jsx';
+import AdminEventosPage from './pages/AdminEventosPage.jsx';
+import AdminNovoEventoPage from './pages/AdminNovoEventoPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
+import AdminClientesPage from './pages/AdminClientesPage.jsx';
+import AdminEventoGaleriaPage from './pages/AdminEventoGaleriaPage.jsx';
+import AdminEventosArquivadosPage from './pages/AdminEventosArquivadosPage.jsx'; // <-- NOVO
 
 function App() {
   return (
@@ -22,7 +22,7 @@ function App() {
       {/* Rotas Públicas */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} /> {/* <-- ROTA NOVA */}
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/evento/:idDoEvento" element={<UploadPage />} />
 
       {/* Rotas de Admin (Protegidas) */}
@@ -30,7 +30,9 @@ function App() {
         <Route index element={<AdminDashboard />} /> 
         <Route path="eventos" element={<AdminEventosPage />} />
         <Route path="eventos/novo" element={<AdminNovoEventoPage />} />
-        <Route path="clientes" element={<AdminClientesPage />} /> {/* <-- ROTA NOVA */}
+        <Route path="eventos/galeria/:idDoEvento" element={<AdminEventoGaleriaPage />} />
+        <Route path="clientes" element={<AdminClientesPage />} />
+        <Route path="arquivados" element={<AdminEventosArquivadosPage />} /> {/* <-- ROTA NOVA */}
       </Route>
     </Routes>
   );

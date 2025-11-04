@@ -2,45 +2,93 @@
 
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FiUploadCloud, FiCamera, FiX, FiCheckCircle } from 'react-icons/fi';
+import { FiUploadCloud, FiCamera, FiX, FiCheckCircle, FiLoader } from 'react-icons/fi';
+
+// --- IMPORTS DO FIREBASE ATUALIZADOS ---
+import { storage, db } from '../firebase.cjs';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+// Precisamos de 'collection' e 'addDoc' para criar o novo doc da foto
+import { doc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
+
+import { v4 as uuidv4 } from 'uuid'; 
 
 export default function UploadPage() {
-  // O useParams lê o ID do evento da URL (ex: /evento/casamento-ana-e-bruno)
   const { idDoEvento } = useParams();
-  
-  // Transforma o ID em um nome de evento legível (vamos simular por enquanto)
   const nomeDoEvento = idDoEvento.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
-  const [files, setFiles] = useState([]); // Armazena os arquivos selecionados
-  const [guestName, setGuestName] = useState(""); // Nome opcional
-  const [isSuccess, setIsSuccess] = useState(false); // Controla a tela de sucesso
+  const [files, setFiles] = useState([]);
+  const [guestName, setGuestName] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  // Função chamada quando o usuário seleciona os arquivos
   function handleFileChange(event) {
     const newFiles = Array.from(event.target.files);
-    
-    // Adiciona os novos arquivos à lista existente
     setFiles((prevFiles) => [...prevFiles, ...newFiles]);
   }
 
-  // Função para remover um arquivo da lista de preview
   function removeFile(indexToRemove) {
     setFiles((prevFiles) => prevFiles.filter((_, index) => index !== indexToRemove));
   }
 
-  // Função chamada ao clicar em "Enviar"
-  function handleSubmit(event) {
+  // --- FUNÇÃO DE SUBMIT TOTALMENTE REFEITA ---
+  async function handleSubmit(event) {
     event.preventDefault();
-    
-    // --- LÓGICA DE UPLOAD PARA O FIREBASE VIRIA AQUI ---
-    console.log(`Enviando ${files.length} fotos para o evento: ${idDoEvento}`);
-    console.log(`Enviadas por: ${guestName || 'Anônimo'}`);
+    if (files.length === 0) return;
 
-    // Simula o sucesso do upload
-    setIsSuccess(true);
+    setIsUploading(true);
+
+    try {
+      // Pega o nome do convidado (ou "Anônimo")
+      const uploaderName = guestName.trim() === "" ? "Anônimo" : guestName;
+
+      // 1. Cria uma referência para a SUBCOLEÇÃO de fotos
+      // Ex: eventos/festa-vicente/photos
+      const photosColRef = collection(db, "eventos", idDoEvento, "photos");
+
+      // 2. Loop para cada arquivo
+      // Usamos um loop 'for...of' para garantir que esperamos cada etapa (upload > getURL > saveDoc)
+      for (const file of files) {
+        const fileExtension = file.name.split('.').pop();
+        const uniqueFileName = `${uuidv4()}.${fileExtension}`;
+        
+        // 2a. Referência no Storage
+        const storageRef = ref(storage, `eventos/${idDoEvento}/${uniqueFileName}`);
+        
+        // 2b. Faz o upload da foto
+        const uploadResult = await uploadBytes(storageRef, file);
+        
+        // 2c. Pega a URL de download da foto que acabamos de enviar
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+        
+        // 2d. Salva as informações (URL e Nome) no Firestore
+        await addDoc(photosColRef, {
+          downloadURL: downloadURL,
+          uploaderName: uploaderName,
+          uploadedAt: serverTimestamp(), // Data/Hora do envio
+          fileName: uniqueFileName, // Nome do arquivo no storage
+        });
+      }
+
+      console.log(`Todos os ${files.length} arquivos foram salvos no Storage e Firestore.`);
+
+      // 3. Atualiza o contador de fotos no documento PRINCIPAL do evento
+      const eventoRef = doc(db, "eventos", idDoEvento);
+      await updateDoc(eventoRef, {
+        fotos: increment(files.length) // Adiciona +X ao contador
+      });
+
+      console.log("Contador do evento atualizado!");
+      setIsSuccess(true); // Mostra a tela de sucesso
+
+    } catch (error) {
+      console.error("Erro ao fazer upload ou atualizar documento: ", error);
+      alert("Houve um erro ao enviar suas fotos. Verifique sua conexão e tente novamente.");
+    } finally {
+      setIsUploading(false); // Termina o upload
+    }
   }
 
-  // Se o upload foi bem-sucedido, mostra a tela de "Obrigado"
+  // --- TELA DE SUCESSO ---
   if (isSuccess) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4 text-center">
@@ -65,60 +113,54 @@ export default function UploadPage() {
     );
   }
 
-  // Tela principal de Upload
+  // --- TELA DE UPLOAD (SEM MUDANÇAS, SÓ O SPINNER DE LOADING) ---
   return (
     <div className="flex justify-center min-h-screen bg-gray-50 p-4">
       <div className="w-full max-w-lg mx-auto">
-        {/* Cabeçalho do Evento */}
         <header className="text-center my-8">
           <FiCamera className="text-blue-600 w-16 h-16 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900">
-            {nomeDoEvento}
-          </h1>
-          <p className="text-lg text-gray-600">
-            Envie suas fotos do evento aqui!
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">{nomeDoEvento}</h1>
+          <p className="text-lg text-gray-600">Envie suas fotos do evento aqui!</p>
         </header>
 
-        {/* Formulário de Upload */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6 relative">
+          
+          {/* TELA DE LOADING (SOBREPÕE O FORMULÁRIO) */}
+          {isUploading && (
+            <div className="absolute inset-0 bg-white bg-opacity-90 flex flex-col items-center justify-center rounded-xl z-10">
+              <FiLoader className="w-16 h-16 text-blue-600 animate-spin" />
+              <span className="text-lg font-medium text-gray-700 mt-4">Enviando...</span>
+            </div>
+          )}
+          
           <div className="mb-4">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Seu nome (opcional)
             </label>
             <input
-              type="text"
-              id="name"
-              value={guestName}
+              type="text" id="name" value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               placeholder="Ex: Ricardo (Padrinho)"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Área de Seleção de Arquivos */}
           <div className="mb-4">
             <label 
               htmlFor="file-upload" 
               className="flex flex-col items-center justify-center w-full h-48 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100"
             >
               <FiUploadCloud className="w-12 h-12 text-blue-500" />
-              <span className="mt-2 text-base font-medium text-gray-700">
-                Clique para selecionar as fotos
-              </span>
+              <span className="mt-2 text-base font-medium text-gray-700">Clique para selecionar as fotos</span>
               <span className="text-sm text-gray-500">ou arraste e solte aqui</span>
             </label>
             <input
-              id="file-upload"
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
+              id="file-upload" type="file" multiple accept="image/*"
+              className="hidden" onChange={handleFileChange}
             />
           </div>
 
-          {/* Previews das Imagens Selecionadas */}
+          {/* Previews */}
           {files.length > 0 && (
             <div className="mb-4">
               <h3 className="text-md font-semibold mb-2">Fotos selecionadas ({files.length}):</h3>
@@ -126,7 +168,7 @@ export default function UploadPage() {
                 {files.map((file, index) => (
                   <div key={index} className="relative group">
                     <img
-                      src={URL.createObjectURL(file)} // Cria um preview local
+                      src={URL.createObjectURL(file)} 
                       alt={`preview ${file.name}`}
                       className="w-full h-24 object-cover rounded-md"
                     />
@@ -145,10 +187,10 @@ export default function UploadPage() {
           
           <button
             type="submit"
-            disabled={files.length === 0} // Desabilita o botão se não houver fotos
+            disabled={files.length === 0 || isUploading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {files.length === 0 ? "Selecione as fotos" : `Enviar ${files.length} Foto(s)`}
+            {isUploading ? "Enviando..." : (files.length === 0 ? "Selecione as fotos" : `Enviar ${files.length} Foto(s)`)}
           </button>
         </form>
       </div>
