@@ -1,95 +1,229 @@
 // src/pages/UploadPage.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // <-- Adicionamos useRef
 import { useParams } from 'react-router-dom';
 import { FiUploadCloud, FiCamera, FiX, FiCheckCircle, FiLoader } from 'react-icons/fi';
 
-// --- IMPORTS DO FIREBASE ATUALIZADOS ---
+// Imports do Firebase (Firestore e Storage)
 import { storage, db } from '../firebase.cjs';
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-// Precisamos de 'collection' e 'addDoc' para criar o novo doc da foto
-import { doc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
+// Importamos 'doc' e 'getDoc' para BUSCAR os dados do evento
+import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 
 import { v4 as uuidv4 } from 'uuid'; 
 
+// --- NOVO COMPONENTE: O MODAL DE PREVIEW DA MOLDURA ---
+// (Coloquei dentro do mesmo arquivo para facilitar)
+
+/**
+ * Este é o Pop-up que funde a foto do usuário com a moldura.
+ */
+function FramePreviewModal({ originalImage, frameUrl, onCancel, onConfirm }) {
+  const canvasRef = useRef(null); // Referência para o <canvas>
+  const [mergedImage, setMergedImage] = useState(null); // A imagem final (para o upload)
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Carrega e funde as imagens
+    async function mergeImages() {
+      setIsLoading(true);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Carregar a foto do convidado
+      const userImg = new Image();
+      userImg.crossOrigin = "anonymous";
+      userImg.src = URL.createObjectURL(originalImage);
+      
+      await new Promise((resolve) => { userImg.onload = resolve; });
+
+      // 2. Carregar a moldura (do Firebase)
+      const frameImg = new Image();
+      frameImg.crossOrigin = "anonymous";
+      frameImg.src = frameUrl;
+      
+      await new Promise((resolve) => { frameImg.onload = resolve; });
+
+      // 3. Define o tamanho do canvas (ex: 1080x1080)
+      //    (Aqui estamos usando o tamanho da moldura como base)
+      canvas.width = frameImg.width;
+      canvas.height = frameImg.height;
+
+      // 4. Desenha a foto do usuário (esticada para preencher o canvas)
+      ctx.drawImage(userImg, 0, 0, canvas.width, canvas.height);
+      
+      // 5. Desenha a moldura POR CIMA da foto do usuário
+      ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+
+      // 6. Converte o canvas de volta para um arquivo (Blob)
+      canvas.toBlob((blob) => {
+        // Cria um novo arquivo a partir do "blob"
+        const finalFile = new File([blob], `framed_${originalImage.name}`, { type: 'image/jpeg', lastModified: Date.now() });
+        setMergedImage(finalFile); // Salva o ARQUIVO final no estado
+        setIsLoading(false);
+      }, 'image/jpeg', 0.9); // 90% de qualidade
+    }
+
+    mergeImages();
+    
+  }, [originalImage, frameUrl]);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Pré-visualizar Moldura</h2>
+        <p className="text-gray-600 mb-4">É assim que sua foto ficará no evento!</p>
+        
+        {/* O Canvas fica escondido, ele é só para processamento */}
+        <canvas ref={canvasRef} className="hidden"></canvas>
+        
+        {/* Mostramos uma pré-visualização em <img> */}
+        <div className="w-full aspect-square bg-gray-100 rounded flex items-center justify-center">
+          {isLoading ? (
+            <FiLoader className="w-12 h-12 text-blue-600 animate-spin" />
+          ) : (
+            <img 
+              src={canvasRef.current.toDataURL()} 
+              alt="Pré-visualização com moldura"
+              className="w-full h-full object-contain"
+            />
+          )}
+        </div>
+
+        <div className="flex gap-4 mt-6">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isLoading}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-6 rounded-lg w-1/2"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(mergedImage)} // Envia o ARQUIVO fundido de volta
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-lg w-1/2"
+          >
+            Confirmar e Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- PÁGINA DE UPLOAD PRINCIPAL ---
+
 export default function UploadPage() {
   const { idDoEvento } = useParams();
-  const nomeDoEvento = idDoEvento.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const [nomeDoEvento, setNomeDoEvento] = useState("...");
+  
+  // --- NOVOS ESTADOS PARA A MOLDURA ---
+  const [eventFrameUrl, setEventFrameUrl] = useState(null); // URL da moldura
+  const [photoToPreview, setPhotoToPreview] = useState(null); // A foto que foi para o modal
+  const [isLoadingEvent, setIsLoadingEvent] = useState(true);
 
   const [files, setFiles] = useState([]);
   const [guestName, setGuestName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // --- NOVO useEffect: BUSCAR OS DADOS DO EVENTO (E A MOLDURA) ---
+  useEffect(() => {
+    async function fetchEventData() {
+      try {
+        const eventRef = doc(db, "eventos", idDoEvento);
+        const docSnap = await getDoc(eventRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setNomeDoEvento(data.nome);
+          if (data.frameURL) {
+            setEventFrameUrl(data.frameURL); // <-- ENCONTRAMOS UMA MOLDURA!
+          }
+        } else {
+          console.error("Evento não encontrado!");
+          alert("Erro: Evento não encontrado.");
+        }
+      } catch (err) {
+        console.error("Erro ao buscar dados do evento:", err);
+      } finally {
+        setIsLoadingEvent(false);
+      }
+    }
+    fetchEventData();
+  }, [idDoEvento]);
+
+
+  // --- FUNÇÃO handleFileChange ATUALIZADA ---
   function handleFileChange(event) {
-    const newFiles = Array.from(event.target.files);
-    setFiles((prevFiles) => [...prevFiles, ...newFiles]);
+    const selectedFile = event.target.files[0];
+    if (!selectedFile) return;
+
+    // Se este evento TEM uma moldura...
+    if (eventFrameUrl) {
+      // ...envia a foto para o modal de preview, em vez de para a lista.
+      setPhotoToPreview(selectedFile);
+    } else {
+      // ...se NÃO tem moldura, funciona como antes (adiciona direto na lista).
+      setFiles((prevFiles) => [...prevFiles, selectedFile]);
+    }
+    
+    // Limpa o input para permitir selecionar o mesmo arquivo de novo
+    event.target.value = null;
   }
 
   function removeFile(indexToRemove) {
     setFiles((prevFiles) => prevFiles.filter((_, index) => index !== indexToRemove));
   }
 
-  // --- FUNÇÃO DE SUBMIT TOTALMENTE REFEITA ---
+  // --- NOVA FUNÇÃO (Chamada pelo Modal) ---
+  // Quando o usuário clica "Confirmar e Enviar" no modal
+  function handleConfirmFrame(mergedFile) {
+    setFiles((prevFiles) => [...prevFiles, mergedFile]); // Adiciona a foto JÁ FUNDIDA à lista
+    setPhotoToPreview(null); // Fecha o modal
+  }
+  
+  // Função de Submit (sem alteração, ela já envia o que está na 'files')
   async function handleSubmit(event) {
+    // ... (o código do handleSubmit é o mesmo que já tínhamos) ...
     event.preventDefault();
     if (files.length === 0) return;
-
     setIsUploading(true);
-
     try {
-      // Pega o nome do convidado (ou "Anônimo")
       const uploaderName = guestName.trim() === "" ? "Anônimo" : guestName;
-
-      // 1. Cria uma referência para a SUBCOLEÇÃO de fotos
-      // Ex: eventos/festa-vicente/photos
       const photosColRef = collection(db, "eventos", idDoEvento, "photos");
-
-      // 2. Loop para cada arquivo
-      // Usamos um loop 'for...of' para garantir que esperamos cada etapa (upload > getURL > saveDoc)
       for (const file of files) {
         const fileExtension = file.name.split('.').pop();
         const uniqueFileName = `${uuidv4()}.${fileExtension}`;
-        
-        // 2a. Referência no Storage
         const storageRef = ref(storage, `eventos/${idDoEvento}/${uniqueFileName}`);
-        
-        // 2b. Faz o upload da foto
         const uploadResult = await uploadBytes(storageRef, file);
-        
-        // 2c. Pega a URL de download da foto que acabamos de enviar
         const downloadURL = await getDownloadURL(uploadResult.ref);
-        
-        // 2d. Salva as informações (URL e Nome) no Firestore
         await addDoc(photosColRef, {
           downloadURL: downloadURL,
           uploaderName: uploaderName,
-          uploadedAt: serverTimestamp(), // Data/Hora do envio
-          fileName: uniqueFileName, // Nome do arquivo no storage
+          uploadedAt: serverTimestamp(),
+          fileName: uniqueFileName,
         });
       }
-
-      console.log(`Todos os ${files.length} arquivos foram salvos no Storage e Firestore.`);
-
-      // 3. Atualiza o contador de fotos no documento PRINCIPAL do evento
       const eventoRef = doc(db, "eventos", idDoEvento);
       await updateDoc(eventoRef, {
-        fotos: increment(files.length) // Adiciona +X ao contador
+        fotos: increment(files.length)
       });
-
-      console.log("Contador do evento atualizado!");
-      setIsSuccess(true); // Mostra a tela de sucesso
-
+      setIsSuccess(true);
     } catch (error) {
       console.error("Erro ao fazer upload ou atualizar documento: ", error);
       alert("Houve um erro ao enviar suas fotos. Verifique sua conexão e tente novamente.");
     } finally {
-      setIsUploading(false); // Termina o upload
+      setIsUploading(false);
     }
   }
 
-  // --- TELA DE SUCESSO ---
+  // Tela de sucesso (sem alteração)
   if (isSuccess) {
+    // ... (código da tela de sucesso) ...
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4 text-center">
         <FiCheckCircle className="text-green-500 w-24 h-24 mb-6" />
@@ -113,9 +247,28 @@ export default function UploadPage() {
     );
   }
 
-  // --- TELA DE UPLOAD (SEM MUDANÇAS, SÓ O SPINNER DE LOADING) ---
+  // Se o evento ainda estiver carregando, mostre um spinner
+  if (isLoadingEvent) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <FiLoader className="w-16 h-16 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+  
+  // Tela de Upload
   return (
     <div className="flex justify-center min-h-screen bg-gray-50 p-4">
+      {/* --- RENDERIZA O MODAL SE UMA FOTO ESTIVER SENDO PREVISTA --- */}
+      {photoToPreview && (
+        <FramePreviewModal 
+          originalImage={photoToPreview}
+          frameUrl={eventFrameUrl}
+          onCancel={() => setPhotoToPreview(null)}
+          onConfirm={handleConfirmFrame}
+        />
+      )}
+
       <div className="w-full max-w-lg mx-auto">
         <header className="text-center my-8">
           <FiCamera className="text-blue-600 w-16 h-16 mx-auto mb-4" />
@@ -125,7 +278,6 @@ export default function UploadPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6 relative">
           
-          {/* TELA DE LOADING (SOBREPÕE O FORMULÁRIO) */}
           {isUploading && (
             <div className="absolute inset-0 bg-white bg-opacity-90 flex flex-col items-center justify-center rounded-xl z-10">
               <FiLoader className="w-16 h-16 text-blue-600 animate-spin" />
@@ -145,25 +297,55 @@ export default function UploadPage() {
             />
           </div>
 
+          {/* Opção 1: Escolher da Galeria */}
           <div className="mb-4">
             <label 
-              htmlFor="file-upload" 
-              className="flex flex-col items-center justify-center w-full h-48 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100"
+              htmlFor="file-gallery" 
+              className="flex flex-col items-center justify-center w-full h-40 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100"
             >
-              <FiUploadCloud className="w-12 h-12 text-blue-500" />
-              <span className="mt-2 text-base font-medium text-gray-700">Clique para selecionar as fotos</span>
-              <span className="text-sm text-gray-500">ou arraste e solte aqui</span>
+              <FiUploadCloud className="w-10 h-10 text-blue-500" />
+              <span className="mt-2 text-base font-medium text-gray-700">Escolher da Galeria</span>
+              <span className="text-sm text-gray-500">ou arraste e solte (PC)</span>
             </label>
             <input
-              id="file-upload" type="file" multiple accept="image/*"
-              className="hidden" onChange={handleFileChange}
+              id="file-gallery"
+              type="file"
+              // Removemos 'multiple' - agora é uma foto por vez para aplicar o filtro
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
             />
           </div>
 
-          {/* Previews */}
+          <div className="flex items-center my-4">
+            <div className="flex-grow border-t border-gray-300"></div>
+            <span className="flex-shrink mx-4 text-gray-500 uppercase text-sm">ou</span>
+            <div className="flex-grow border-t border-gray-300"></div>
+          </div>
+
+          {/* Opção 2: Abrir a Câmera */}
+          <div className="mb-4">
+            <label 
+              htmlFor="file-camera" 
+              className="w-full flex items-center justify-center gap-3 bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg cursor-pointer"
+            >
+              <FiCamera size={20} />
+              <span>Tirar Foto Agora</span>
+            </label>
+            <input
+              id="file-camera"
+              type="file"
+              accept="image/*"
+              capture="user"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {/* Previews (agora mostram as fotos JÁ COM MOLDURA) */}
           {files.length > 0 && (
             <div className="mb-4">
-              <h3 className="text-md font-semibold mb-2">Fotos selecionadas ({files.length}):</h3>
+              <h3 className="text-md font-semibold mb-2">Fotos prontas para enviar ({files.length}):</h3>
               <div className="grid grid-cols-3 gap-2">
                 {files.map((file, index) => (
                   <div key={index} className="relative group">

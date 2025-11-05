@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiCamera, FiLink, FiArchive } from 'react-icons/fi';
+// --- ESTA É A LINHA CORRIGIDA (Adicionamos o 'FiX') ---
+import { FiPlus, FiCamera, FiLink, FiArchive, FiX } from 'react-icons/fi';
 import { BsQrCode } from 'react-icons/bs';
 
 import { db } from '../firebase.cjs';
@@ -31,7 +32,7 @@ export default function AdminEventosPage() {
         setEventos(eventosList);
       } catch (error) {
         console.error("Erro ao buscar eventos: ", error);
-        alert("Não foi possível carregar os eventos do banco de dados.");
+        // O alerta de "Não foi possível carregar" que você viu
       } finally {
         setIsLoading(false);
       }
@@ -66,7 +67,6 @@ export default function AdminEventosPage() {
 
   return (
     <div>
-      {/* Cabeçalho */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Gerenciar Eventos</h1>
         <Link
@@ -78,7 +78,6 @@ export default function AdminEventosPage() {
         </Link>
       </div>
 
-      {/* --- LINK PARA ARQUIVADOS ADICIONADO --- */}
       <div className="mb-4">
         <Link 
           to="/admin/arquivados" 
@@ -88,10 +87,8 @@ export default function AdminEventosPage() {
         </Link>
       </div>
 
-      {/* Tabela de Eventos Ativos */}
       <div className="bg-white rounded-lg shadow-lg">
         <table className="w-full table-auto">
-          {/* ... (cabeçalho da tabela) ... */}
           <thead className="border-b border-gray-200">
             <tr>
               <th className="text-left text-sm font-semibold text-gray-600 p-4">Nome do Evento</th>
@@ -142,7 +139,7 @@ export default function AdminEventosPage() {
         </table>
       </div>
 
-      {/* Modal (sem alterações) */}
+      {/* Modal (sem alterações, mas o FiX agora vai funcionar) */}
       {modalEvent && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
@@ -152,7 +149,6 @@ export default function AdminEventosPage() {
             className="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full"
             onClick={e => e.stopPropagation()} 
           >
-            {/* ... (conteúdo do modal) ... */}
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-900">QR Code do Evento</h2>
               <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
