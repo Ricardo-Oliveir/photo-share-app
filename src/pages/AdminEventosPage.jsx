@@ -9,36 +9,61 @@ import { BsQrCode } from 'react-icons/bs';
 import { db } from '../firebase.cjs';
 import { collection, getDocs, query, orderBy, where, doc, updateDoc } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 export default function AdminEventosPage() {
   const [eventos, setEventos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modalEvent, setModalEvent] = useState(null);
+  const { userDetails, isCliente } = useAuth();
 
   useEffect(() => {
     async function fetchEventos() {
       try {
-        const q = query(
-          collection(db, "eventos"), 
-          where("status", "==", "ativo"),
-          orderBy("dataCriacao", "desc")
-        );
+        let q;
+        
+        // Se for cliente, busca apenas eventos onde ele é o responsável
+        if (isCliente && userDetails) {
+          q = query(
+            collection(db, "eventos"), 
+            where("status", "==", "ativo"),
+            where("usuarioId", "==", userDetails.uid)
+            // Removido orderBy para evitar necessidade de índice composto
+          );
+        } else {
+          // Admin e fotógrafo veem todos os eventos ativos
+          q = query(
+            collection(db, "eventos"), 
+            where("status", "==", "ativo")
+            // Removido orderBy para evitar necessidade de índice composto
+          );
+        }
         
         const querySnapshot = await getDocs(q);
-        const eventosList = querySnapshot.docs.map(doc => ({
+        let eventosList = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        // Ordena manualmente por data de criação (mais recente primeiro)
+        eventosList.sort((a, b) => {
+          const dateA = a.dataCriacao?.toDate?.() || new Date(0);
+          const dateB = b.dataCriacao?.toDate?.() || new Date(0);
+          return dateB - dateA;
+        });
+        
         setEventos(eventosList);
       } catch (error) {
         console.error("Erro ao buscar eventos: ", error);
-        // O alerta de "Não foi possível carregar" que você viu
       } finally {
         setIsLoading(false);
       }
     }
-    fetchEventos();
-  }, []);
+    
+    if (userDetails) {
+      fetchEventos();
+    }
+  }, [userDetails, isCliente]);
 
   async function handleArchiveEvent(evento) {
     if (!window.confirm(`Tem certeza que deseja arquivar o evento "${evento.nome}"? Ele sairá desta lista.`)) {
@@ -68,43 +93,65 @@ export default function AdminEventosPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Gerenciar Eventos</h1>
-        <Link
-          to="/admin/eventos/novo" 
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg"
-        >
-          <FiPlus />
-          <span>Criar Novo Evento</span>
-        </Link>
+        <h1 className="text-3xl font-bold text-gray-900">
+          {isCliente ? 'Meus Eventos' : 'Gerenciar Eventos'}
+        </h1>
+        {/* Botão de criar evento apenas para Admin e Fotógrafo */}
+        {!isCliente && (
+          <Link
+            to="/admin/eventos/novo" 
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg"
+          >
+            <FiPlus />
+            <span>Criar Novo Evento</span>
+          </Link>
+        )}
       </div>
 
-      <div className="mb-4">
-        <Link 
-          to="/admin/arquivados" 
-          className="text-sm text-blue-600 hover:underline"
-        >
-          Ver eventos arquivados
-        </Link>
-      </div>
+      {!isCliente && (
+        <div className="mb-4">
+          <Link 
+            to="/admin/arquivados" 
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Ver eventos arquivados
+          </Link>
+        </div>
+      )}
 
-      <div className="bg-white rounded-lg shadow-lg">
+      <div className="bg-white rounded-lg shadow-lg overflow-x-auto">
         <table className="w-full table-auto">
           <thead className="border-b border-gray-200">
             <tr>
               <th className="text-left text-sm font-semibold text-gray-600 p-4">Nome do Evento</th>
+              {!isCliente && (
+                <th className="text-left text-sm font-semibold text-gray-600 p-4">Responsável</th>
+              )}
               <th className="text-left text-sm font-semibold text-gray-600 p-4">Fotos</th>
               <th className="text-left text-sm font-semibold text-gray-600 p-4">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan="3" className="p-4 text-center text-gray-500">Carregando eventos...</td></tr>
+              <tr><td colSpan={isCliente ? "3" : "4"} className="p-4 text-center text-gray-500">Carregando eventos...</td></tr>
             ) : eventos.length === 0 ? (
-              <tr><td colSpan="3" className="p-4 text-center text-gray-500">Nenhum evento ativo encontrado.</td></tr>
+              <tr><td colSpan={isCliente ? "3" : "4"} className="p-4 text-center text-gray-500">Nenhum evento ativo encontrado.</td></tr>
             ) : (
               eventos.map((evento) => (
                 <tr key={evento.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="p-4 text-gray-800 font-medium">{evento.nome}</td>
+                  {!isCliente && (
+                    <td className="p-4 text-gray-600">
+                      {evento.usuarioNome ? (
+                        <div>
+                          <div className="font-medium text-gray-800">{evento.usuarioNome}</div>
+                          <div className="text-xs text-gray-500">{evento.usuarioEmail}</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm italic">Não atribuído</span>
+                      )}
+                    </td>
+                  )}
                   <td className="p-4 text-gray-600">{evento.fotos}</td>
                   <td className="p-4 flex items-center gap-3">
                     <Link 
@@ -125,12 +172,15 @@ export default function AdminEventosPage() {
                     >
                       <BsQrCode size={18} />
                     </button>
-                    <button 
-                      onClick={() => handleArchiveEvent(evento)}
-                      className="text-red-500 hover:text-red-700" title="Arquivar Evento"
-                    >
-                      <FiArchive size={18} />
-                    </button>
+                    {/* Botão de arquivar apenas para Admin e Fotógrafo */}
+                    {!isCliente && (
+                      <button 
+                        onClick={() => handleArchiveEvent(evento)}
+                        className="text-red-500 hover:text-red-700" title="Arquivar Evento"
+                      >
+                        <FiArchive size={18} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

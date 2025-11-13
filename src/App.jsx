@@ -14,7 +14,9 @@ import AdminNovoEventoPage from './pages/AdminNovoEventoPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import AdminClientesPage from './pages/AdminClientesPage.jsx';
 import AdminEventoGaleriaPage from './pages/AdminEventoGaleriaPage.jsx';
-import AdminEventosArquivadosPage from './pages/AdminEventosArquivadosPage.jsx'; // <-- NOVO
+import AdminEventosArquivadosPage from './pages/AdminEventosArquivadosPage.jsx';
+import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
+import ClienteDashboard from './pages/ClienteDashboard.jsx'; // <-- NOVO
 
 function App() {
   return (
@@ -25,6 +27,9 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/evento/:idDoEvento" element={<UploadPage />} />
 
+      {/* Rota específica para Clientes */}
+      <Route path="/cliente" element={<ClienteDashboard />} />
+
       {/* Rotas de Admin (Protegidas) */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} /> 
@@ -32,7 +37,8 @@ function App() {
         <Route path="eventos/novo" element={<AdminNovoEventoPage />} />
         <Route path="eventos/galeria/:idDoEvento" element={<AdminEventoGaleriaPage />} />
         <Route path="clientes" element={<AdminClientesPage />} />
-        <Route path="arquivados" element={<AdminEventosArquivadosPage />} /> {/* <-- ROTA NOVA */}
+        <Route path="arquivados" element={<AdminEventosArquivadosPage />} />
+        <Route path="usuarios" element={<AdminUsuariosPage />} /> {/* <-- ROTA NOVA */}
       </Route>
     </Routes>
   );

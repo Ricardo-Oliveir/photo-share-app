@@ -1,22 +1,64 @@
 // src/pages/LoginPage.jsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FaCameraRetro } from 'react-icons/fa';
-// Importamos o Link (novo) e o useNavigate (que já tínhamos)
 import { Link, useNavigate } from 'react-router-dom';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase.cjs';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(false);
 
   // Esta função é chamada quando o formulário é enviado
-  function handleLogin(event) {
-    event.preventDefault(); // Impede o recarregamento da página
+  async function handleLogin(event) {
+    event.preventDefault();
+    setErro('');
+    setCarregando(true);
     
-    // (Aqui viria a lógica real de checar o email/senha no Firebase)
-    
-    // Simulando um login bem-sucedido e redirecionando:
-    console.log("Login simulado! Redirecionando...");
-    navigate('/admin'); // Envia o usuário para o painel
+    try {
+      // Autentica com Firebase Authentication
+      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
+      console.log("Login realizado com sucesso!");
+      
+      // Busca os dados do usuário no Firestore para determinar o tipo
+      const userDoc = await getDoc(doc(db, 'usuarios', userCredential.user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Redireciona baseado no tipo de usuário
+        if (userData.tipo === 'cliente') {
+          navigate('/cliente');
+        } else {
+          navigate('/admin');
+        }
+      } else {
+        // Se não encontrar dados, assume que é admin (retrocompatibilidade)
+        navigate('/admin');
+      }
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      
+      // Mensagens de erro amigáveis
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        setErro('Email ou senha incorretos');
+      } else if (error.code === 'auth/user-not-found') {
+        setErro('Usuário não encontrado');
+      } else if (error.code === 'auth/invalid-email') {
+        setErro('Email inválido');
+      } else if (error.code === 'auth/too-many-requests') {
+        setErro('Muitas tentativas. Tente novamente mais tarde');
+      } else {
+        setErro('Erro ao fazer login. Tente novamente');
+      }
+    } finally {
+      setCarregando(false);
+    }
   }
 
   return (
@@ -55,6 +97,13 @@ export default function LoginPage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Bem-vindo de volta</h2>
             <p className="text-gray-500 mb-6">Entre com suas credenciais</p>
 
+            {/* Mensagem de Erro */}
+            {erro && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{erro}</p>
+              </div>
+            )}
+
             <div className="mb-4">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 E-mail
@@ -63,6 +112,9 @@ export default function LoginPage() {
                 type="email"
                 id="email"
                 placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -75,15 +127,19 @@ export default function LoginPage() {
                 type="password"
                 id="senha"
                 placeholder="********"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300"
+              disabled={carregando}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:bg-blue-400 disabled:cursor-not-allowed"
             >
-              Entrar
+              {carregando ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
         </div>

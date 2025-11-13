@@ -1,10 +1,10 @@
 // src/pages/AdminNovoEventoPage.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 // --- IMPORTS ATUALIZADOS DO FIREBASE ---
-import { db, storage } from '../firebase.cjs'; // Importamos o Storage
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db, storage, auth } from '../firebase.cjs'; // Importamos o Storage e Auth
+import { doc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Funções do Storage
 import { FiUpload } from 'react-icons/fi';
 
@@ -18,9 +18,41 @@ export default function AdminNovoEventoPage() {
   const [nomeEvento, setNomeEvento] = useState('');
   // --- NOVO ESTADO PARA O ARQUIVO DA MOLDURA ---
   const [frameFile, setFrameFile] = useState(null); // 'frame' = moldura
+  // --- NOVO ESTADO PARA USUÁRIO SELECIONADO ---
+  const [usuarioId, setUsuarioId] = useState('');
+  const [usuarios, setUsuarios] = useState([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState(true);
   
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  // --- CARREGAR LISTA DE USUÁRIOS ---
+  useEffect(() => {
+    async function carregarUsuarios() {
+      try {
+        const usuariosRef = collection(db, "usuarios");
+        const snapshot = await getDocs(usuariosRef);
+        const listaUsuarios = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsuarios(listaUsuarios);
+        
+        // Se o usuário atual estiver logado, pré-seleciona ele
+        if (auth.currentUser) {
+          const usuarioAtual = listaUsuarios.find(u => u.email === auth.currentUser.email);
+          if (usuarioAtual) {
+            setUsuarioId(usuarioAtual.id);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar usuários:", error);
+      } finally {
+        setLoadingUsuarios(false);
+      }
+    }
+    carregarUsuarios();
+  }, []);
 
   // Função para guardar o arquivo da moldura quando selecionado
   function handleFrameFileChange(event) {
@@ -38,6 +70,12 @@ export default function AdminNovoEventoPage() {
     const eventoId = slugify(nomeEvento);
     if (!eventoId) {
       alert("Por favor, digite um nome de evento válido.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!usuarioId) {
+      alert("Por favor, selecione um usuário responsável pelo evento.");
       setIsLoading(false);
       return;
     }
@@ -62,13 +100,19 @@ export default function AdminNovoEventoPage() {
       // --- PASSO 2: SALVAR O EVENTO NO FIRESTORE ---
       const novoEventoRef = doc(db, "eventos", eventoId);
       
+      // Busca os dados do usuário selecionado
+      const usuarioSelecionado = usuarios.find(u => u.id === usuarioId);
+      
       await setDoc(novoEventoRef, {
         id: eventoId,
         nome: nomeEvento,
         dataCriacao: serverTimestamp(),
         fotos: 0,
         status: "ativo",
-        frameURL: frameURL // <-- SALVA A URL DA MOLDURA (pode ser null)
+        frameURL: frameURL, // <-- SALVA A URL DA MOLDURA (pode ser null)
+        usuarioId: usuarioId, // <-- ID do usuário responsável
+        usuarioNome: usuarioSelecionado?.nome || '',
+        usuarioEmail: usuarioSelecionado?.email || ''
       });
 
       console.log(`Novo evento criado com ID: ${eventoId}`);
@@ -102,6 +146,37 @@ export default function AdminNovoEventoPage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             required disabled={isLoading} 
           />
+        </div>
+
+        {/* --- NOVO CAMPO: SELEÇÃO DE USUÁRIO --- */}
+        <div className="mb-6">
+          <label htmlFor="usuario" className="block text-sm font-medium text-gray-700 mb-1">
+            Responsável pelo Evento <span className="text-red-500">*</span>
+          </label>
+          {loadingUsuarios ? (
+            <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+              Carregando usuários...
+            </div>
+          ) : (
+            <select
+              id="usuario"
+              value={usuarioId}
+              onChange={(e) => setUsuarioId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+              disabled={isLoading}
+            >
+              <option value="">Selecione um usuário</option>
+              {usuarios.map((usuario) => (
+                <option key={usuario.id} value={usuario.id}>
+                  {usuario.nome} ({usuario.email}) - {usuario.tipo || 'N/A'}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Selecione o fotógrafo ou responsável que irá gerenciar este evento
+          </p>
         </div>
         
         {/* --- NOVO CAMPO: UPLOAD DA MOLDURA --- */}

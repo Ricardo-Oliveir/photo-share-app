@@ -17,15 +17,23 @@ export default function AdminEventosArquivadosPage() {
     try {
       const q = query(
         collection(db, "eventos"), 
-        where("status", "==", "arquivado"), // <-- SÓ PEGA EVENTOS ARQUIVADOS
-        orderBy("dataCriacao", "desc")
+        where("status", "==", "arquivado")
+        // Removido orderBy para evitar necessidade de índice composto
       );
       
       const querySnapshot = await getDocs(q);
-      const eventosList = querySnapshot.docs.map(doc => ({
+      let eventosList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Ordena manualmente por data de criação (mais recente primeiro)
+      eventosList.sort((a, b) => {
+        const dateA = a.dataCriacao?.toDate?.() || new Date(0);
+        const dateB = b.dataCriacao?.toDate?.() || new Date(0);
+        return dateB - dateA;
+      });
+      
       setEventosArquivados(eventosList);
     } catch (error) {
       console.error("Erro ao buscar eventos arquivados: ", error);
