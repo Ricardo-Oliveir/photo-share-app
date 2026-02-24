@@ -11,7 +11,8 @@ import {
     FiPackage,
     FiChevronRight,
     FiExternalLink,
-    FiMousePointer
+    FiMousePointer,
+    FiCheck
 } from 'react-icons/fi';
 import { BsQrCode } from 'react-icons/bs';
 import { FaCameraRetro } from 'react-icons/fa';
@@ -24,18 +25,17 @@ export default function LandingPage() {
             <HeroSection />
             <HowItWorksSection />
             <FeaturesSection />
+            <PricingSection /> {/* Nova seção de preços integrada */}
             <CTASection />
             <Footer />
         </div>
     );
 }
 
-// ----- 1. SEÇÃO HERO (IMAGEM 1) -----
+// ----- 1. SEÇÃO HERO -----
 function HeroSection() {
     return (
-        
         <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-hero-pattern bg-cover bg-center">
-            {/* Overlay claro para garantir a legibilidade do texto */}
             <div className="absolute inset-0 bg-white opacity-80" />
 
             <div className="relative z-10 text-center p-6 max-w-3xl mx-auto">
@@ -45,22 +45,20 @@ function HeroSection() {
 
                 <h1 className="text-5xl md:text-7xl font-bold mb-6 text-gray-900">
                     Capture Momentos, <br />
-                    <span className="text-blue-600">
-                        Compartilhe Memórias
-                    </span>
+                    <span className="text-blue-600">Compartilhe Memórias</span>
                 </h1>
 
                 <p className="text-lg md:text-xl text-gray-600 max-w-xl mx-auto mb-10">
-                    A maneira mais fácil de coletar e compartilhar fotos de eventos. Um QR Code, upload instantâneo, download temporário.
+                    A maneira mais fácil de coletar e compartilhar fotos de eventos. Um QR Code, upload instantâneo, download garantido por um mês.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-                    <a
-                        href="/login"
+                    <Link
+                        to="/login"
                         className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
                     >
                         Começar Agora <FiChevronRight className="ml-2" />
-                    </a>
+                    </Link>
                     <a
                         href="#how-it-works"
                         className="flex items-center justify-center bg-white text-gray-700 font-semibold py-3 px-8 rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 transition-all duration-300"
@@ -71,7 +69,7 @@ function HeroSection() {
 
                 <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto text-gray-700">
                     <div className="text-center">
-                        <h3 className="text-xl font-bold text-blue-600">15</h3>
+                        <h3 className="text-xl font-bold text-blue-600">30</h3>
                         <p className="text-sm">Dias de Acesso</p>
                     </div>
                     <div className="text-center">
@@ -92,7 +90,7 @@ function HeroSection() {
     );
 }
 
-// ----- 2. SEÇÃO COMO FUNCIONA (IMAGEM 2) -----
+// ----- 2. SEÇÃO COMO FUNCIONA -----
 function HowItWorksSection() {
     const cardIconColor = "text-blue-600";
     const cardIconBg = "bg-blue-100";
@@ -123,7 +121,7 @@ function HowItWorksSection() {
                         step="3"
                         icon={<FiDownload size={32} className={cardIconColor} />}
                         title="Baixe e Compartilhe"
-                        description="O admin recebe um link temporário para baixar todas as fotos. Válido por 15 dias."
+                        description="O admin gerencia a galeria em tempo real e baixa todas as fotos. Válido por 30 dias."
                         iconBg={cardIconBg}
                     />
                 </div>
@@ -132,7 +130,6 @@ function HowItWorksSection() {
     );
 }
 
-// Componente Card (usado na seção 2)
 function HowItWorksCard({ step, icon, title, description, iconBg }) {
     return (
         <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-left relative">
@@ -148,7 +145,7 @@ function HowItWorksCard({ step, icon, title, description, iconBg }) {
     );
 }
 
-// ----- 3. SEÇÃO FEATURES (IMAGEM 3) -----
+// ----- 3. SEÇÃO FEATURES -----
 function FeaturesSection() {
     const featureIconColor = "text-blue-600";
     const featureIconBg = "bg-blue-100";
@@ -161,49 +158,18 @@ function FeaturesSection() {
                     Recursos pensados para tornar o compartilhamento de fotos simples e seguro
                 </p>
                 <div className="grid md:grid-cols-3 gap-6">
-                    <FeatureCard
-                        icon={<FiShield size={24} className={featureIconColor} />}
-                        title="100% Seguro"
-                        description="Armazenamento em nuvem com criptografia. Suas fotos estão protegidas."
-                        iconBg={featureIconBg}
-                    />
-                    <FeatureCard
-                        icon={<FiClock size={24} className={featureIconColor} />}
-                        title="Acesso Temporário"
-                        description="Links expiram automaticamente após 15 dias, garantindo privacidade."
-                        iconBg={featureIconBg}
-                    />
-                    <FeatureCard
-                        icon={<FiSmartphone size={24} className={featureIconColor} />}
-                        title="Mobile First"
-                        description="Otimizado para celular. Upload rápido direto do smartphone."
-                        iconBg={featureIconBg}
-                    />
-                    <FeatureCard
-                        icon={<FiLink size={24} className={featureIconColor} />}
-                        title="Compartilhamento Fácil"
-                        description="Um link único para cada evento. Compartilhe com todos os participantes."
-                        iconBg={featureIconBg}
-                    />
-                    <FeatureCard
-                        icon={<FiUsers size={24} className={featureIconColor} />}
-                        title="Múltiplos Usuários"
-                        description="Vários participantes podem enviar fotos para o mesmo evento."
-                        iconBg={featureIconBg}
-                    />
-                    <FeatureCard
-                        icon={<FiPackage size={24} className={featureIconColor} />}
-                        title="Sem Limite de Espaço"
-                        description="Envie quantas fotos quiser. Não há limite de armazenamento (configurável)."
-                        iconBg={featureIconBg}
-                    />
+                    <FeatureCard icon={<FiShield size={24} className={featureIconColor} />} title="100% Seguro" description="Armazenamento em nuvem seguro para proteger suas memórias." iconBg={featureIconBg} />
+                    <FeatureCard icon={<FiClock size={24} className={featureIconColor} />} title="Acesso por 30 Dias" description="Links e galerias expiram automaticamente após 30 dias." iconBg={featureIconBg} />
+                    <FeatureCard icon={<FiSmartphone size={24} className={featureIconColor} />} title="Mobile First" description="Otimizado para smartphones. Upload rápido direto do navegador." iconBg={featureIconBg} />
+                    <FeatureCard icon={<FiLink size={24} className={featureIconColor} />} title="Compartilhamento Fácil" description="Um link único ou QR Code para cada evento ativo." iconBg={featureIconBg} />
+                    <FeatureCard icon={<FiUsers size={24} className={featureIconColor} />} title="Múltiplos Usuários" description="Todos os participantes podem enviar fotos simultaneamente." iconBg={featureIconBg} />
+                    <FeatureCard icon={<FiPackage size={24} className={featureIconColor} />} title="Planos Flexíveis" description="Escolha entre 300, 1000 ou fotos ilimitadas conforme seu evento." iconBg={featureIconBg} />
                 </div>
             </div>
         </section>
     );
 }
 
-// Componente Card (usado na seção 3)
 function FeatureCard({ icon, title, description, iconBg }) {
     return (
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 text-left">
@@ -216,7 +182,40 @@ function FeatureCard({ icon, title, description, iconBg }) {
     );
 }
 
-// ----- 4. SEÇÃO CTA FINAL (IMAGEM 4) -----
+// ----- NOVA SEÇÃO: PREÇOS -----
+function PricingSection() {
+    const planos = [
+        { nome: 'Básico', preco: '49,90', fotos: '300 fotos', destaque: false },
+        { nome: 'Padrão', preco: '149,90', fotos: '1.000 fotos', destaque: true },
+        { nome: 'Premium', preco: '499,90', fotos: 'Ilimitado', destaque: false }
+    ];
+
+    return (
+        <section id="pricing" className="py-20 bg-white">
+            <div className="max-w-6xl mx-auto px-6 text-center">
+                <h2 className="text-4xl font-bold mb-12 text-gray-900">Escolha seu Plano</h2>
+                <div className="grid md:grid-cols-3 gap-8">
+                    {planos.map((p, i) => (
+                        <div key={i} className={`p-8 rounded-2xl border ${p.destaque ? 'border-blue-600 shadow-2xl scale-105' : 'border-gray-100 shadow-lg'} flex flex-col`}>
+                            <h3 className="text-xs font-black uppercase text-blue-600 mb-4">{p.nome}</h3>
+                            <div className="text-4xl font-black text-gray-900 mb-6">R$ {p.preco}</div>
+                            <ul className="text-left space-y-4 mb-8 flex-1">
+                                <li className="flex items-center gap-2 text-sm"><FiCheck className="text-green-500" /> {p.fotos}</li>
+                                <li className="flex items-center gap-2 text-sm"><FiCheck className="text-green-500" /> 30 dias de galeria</li>
+                                <li className="flex items-center gap-2 text-sm"><FiCheck className="text-green-500" /> Download individual e em massa</li>
+                            </ul>
+                            <Link to="/cadastro" className={`w-full py-3 rounded-xl font-bold transition-all ${p.destaque ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}>
+                                Começar Evento
+                            </Link>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+// ----- 4. SEÇÃO CTA FINAL -----
 function CTASection() {
     return (
         <section id="cta" className="py-24 bg-gradient-to-b from-white to-blue-50">
@@ -226,88 +225,42 @@ function CTASection() {
                 </div>
                 <h2 className="text-5xl font-bold mb-6 text-gray-900">Pronto para Começar?</h2>
                 <p className="text-lg text-gray-600 mb-10">
-                    Crie seu primeiro evento agora e simplifique o compartilhamento de fotos.
-                    <br />
+                    Crie seu primeiro evento agora e simplifique o compartilhamento de fotos. <br />
                     Sem complicações, sem instalações, apenas momentos inesquecíveis.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <a
-                        href="#admin-login"
+                    <Link
+                        to="/cadastro"
                         className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
                     >
                         Criar Meu Evento <FiChevronRight className="ml-2" />
-                    </a>
-                    <a
-                        href="#support"
+                    </Link>
+                    <Link
+                        to="/login"
                         className="flex items-center justify-center bg-white text-gray-700 font-semibold py-3 px-8 rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 transition-all duration-300"
                     >
                         Falar com Suporte <FiExternalLink className="ml-2" />
-                    </a>
-                </div>
-                <div className="mt-10 text-sm text-gray-500 flex items-center justify-center gap-4">
-                    <span>📦 Armazenamento seguro</span>
-                    <span>•</span>
-                    <span>⚡ Upload rápido</span>
-                    <span>•</span>
-                    <span>🐵 Sem complicações</span>
+                    </Link>
                 </div>
             </div>
         </section>
     );
 }
 
-// ----- 5. RODAPÉ (IMAGEM 4) -----
+// ----- 5. RODAPÉ -----
 function Footer() {
     return (
         <footer className="bg-white border-t border-gray-200">
-            <div className="max-w-6xl mx-auto px-6 py-12">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                    {/* Logo e Descrição */}
-                    <div>
-                        <div className="flex items-center mb-2">
-                            <div className="p-2 bg-blue-600 rounded-lg mr-2">
-                                <FaCameraRetro className="text-white" />
-                            </div>
-                            <span className="font-bold text-xl text-gray-900">PhotoShare</span>
-                        </div>
-                        <p className="text-gray-500 text-sm">
-                            Compartilhe momentos, crie memórias.
-                        </p>
+            <div className="max-w-6xl mx-auto px-6 py-12 text-center">
+                <div className="flex items-center justify-center mb-6">
+                    <div className="p-2 bg-blue-600 rounded-lg mr-2">
+                        <FaCameraRetro className="text-white" />
                     </div>
-
-                    {/* Links de Produto */}
-                    <div>
-                        <h4 className="font-semibold mb-3 text-gray-800">Produto</h4>
-                        <ul className="space-y-2 text-sm text-gray-600">
-                            <li><a href="#how-it-works" className="hover:text-blue-600">Como Funciona</a></li>
-                            <li><a href="#features" className="hover:text-blue-600">Recursos</a></li>
-                            <li><a href="#pricing" className="hover:text-blue-600">Preços</a></li>
-                        </ul>
-                    </div>
-
-                    {/* Links de Suporte */}
-                    <div>
-                        <h4 className="font-semibold mb-3 text-gray-800">Suporte</h4>
-                        <ul className="space-y-2 text-sm text-gray-600">
-                            <li><a href="#faq" className="hover:text-blue-600">FAQ</a></li>
-                            <li><a href="#contact" className="hover:text-blue-600">Contato</a></li>
-                            <li><a href="#docs" className="hover:text-blue-600">Documentação</a></li>
-                        </ul>
-                    </div>
-
-                    {/* Links Legais */}
-                    <div>
-                        <h4 className="font-semibold mb-3 text-gray-800">Legal</h4>
-                        <ul className="space-y-2 text-sm text-gray-600">
-                            <li><a href="#privacy" className="hover:text-blue-600">Privacidade</a></li>
-                            <li><a href="#terms" className="hover:text-blue-600">Termos de Uso</a></li>
-                            <li><a href="#cookies" className="hover:text-blue-600">Cookies</a></li>
-                        </ul>
-                    </div>
+                    <span className="font-bold text-xl text-gray-900">PhotoShare</span>
                 </div>
-
-                <div className="mt-10 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
-                    © 2025 PhotoShare. Todos os direitos reservados.
+                <p className="text-gray-500 text-sm mb-6">Compartilhe momentos, crie memórias.</p>
+                <div className="pt-8 border-t border-gray-200 text-sm text-gray-500 font-bold uppercase tracking-widest">
+                    © 2026 PhotoShare. Todos os direitos reservados.
                 </div>
             </div>
         </footer>

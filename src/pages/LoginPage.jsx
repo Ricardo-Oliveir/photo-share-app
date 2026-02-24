@@ -1,29 +1,51 @@
 // src/pages/LoginPage.jsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FaCameraRetro } from 'react-icons/fa';
-// Importamos o Link (novo) e o useNavigate (que já tínhamos)
 import { Link, useNavigate } from 'react-router-dom';
+
+// --- IMPORTS DO FIREBASE AUTH ---
+import { auth } from '../firebase.js';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // Esta função é chamada quando o formulário é enviado
-  function handleLogin(event) {
-    event.preventDefault(); // Impede o recarregamento da página
-    
-    // (Aqui viria a lógica real de checar o email/senha no Firebase)
-    
-    // Simulando um login bem-sucedido e redirecionando:
-    console.log("Login simulado! Redirecionando...");
-    navigate('/admin'); // Envia o usuário para o painel
+  // --- ESTADOS PARA CONTROLAR O FORMULÁRIO ---
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // --- FUNÇÃO DE LOGIN ATUALIZADA ---
+  async function handleLogin(event) {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Tenta fazer o login no Firebase Auth
+      await signInWithEmailAndPassword(auth, email, password);
+
+      console.log("Login realizado com sucesso!");
+      navigate('/admin'); // Envia o utilizador para o painel
+
+    } catch (err) {
+      console.error("Erro ao fazer login: ", err.message);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        setError("E-mail ou senha inválidos. Tente novamente.");
+      } else {
+        setError("Erro ao fazer login. Tente novamente.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-white to-blue-50">
       <div className="w-full max-w-md mx-auto p-4">
-        
-        {/* Logo */}
+
         <div className="flex flex-col items-center mb-6">
           <div className="p-3 bg-blue-600 rounded-lg mb-3">
             <FaCameraRetro className="text-white" size={24} />
@@ -32,26 +54,25 @@ export default function LoginPage() {
           <p className="text-gray-500">Entre ou crie sua conta</p>
         </div>
 
-        {/* Card Principal */}
         <div className="bg-white rounded-xl shadow-lg p-8">
-          
-          {/* --- ESTA É A SEÇÃO ATUALIZADA --- */}
-          {/* Abas de Login / Criar Conta */}
+
           <div className="flex border-b border-gray-200 mb-6">
             <button className="flex-1 py-3 text-center font-semibold text-blue-600 border-b-2 border-blue-600">
               Login
             </button>
-            {/* O botão "Criar Conta" agora é um Link que leva para a rota /register */}
-            <Link 
-              to="/register" 
-              className="flex-1 py-3 text-center font-semibold text-gray-400 hover:text-gray-600"
-            >
+            <Link to="/register" className="flex-1 py-3 text-center font-semibold text-gray-400 hover:text-gray-600">
               Criar Conta
             </Link>
           </div>
 
-          {/* Formulário */}
           <form onSubmit={handleLogin}>
+            {/* --- MOSTRAR MENSAGEM DE ERRO --- */}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Bem-vindo de volta</h2>
             <p className="text-gray-500 mb-6">Entre com suas credenciais</p>
 
@@ -60,10 +81,11 @@ export default function LoginPage() {
                 E-mail
               </label>
               <input
-                type="email"
-                id="email"
-                placeholder="seu@email.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="email" id="email" placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                required
               />
             </div>
 
@@ -72,30 +94,23 @@ export default function LoginPage() {
                 Senha
               </label>
               <input
-                type="password"
-                id="senha"
-                placeholder="********"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="password" id="senha" placeholder="********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                required
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-300"
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg disabled:opacity-50"
             >
-              Entrar
+              {isLoading ? "Entrando..." : "Entrar"}
             </button>
           </form>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-gray-500 mt-6">
-          Ao criar uma conta, você concorda com nossos
-          <br />
-          <a href="#" className="underline hover:text-blue-600">Termos de Uso</a> e 
-          <a href="#" className="underline hover:text-blue-600"> Política de Privacidade</a>
-        </p>
-
       </div>
     </div>
   );

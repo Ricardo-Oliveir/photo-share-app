@@ -1,138 +1,70 @@
-// src/pages/AdminEventosArquivadosPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiTrash2, FiRefreshCw } from 'react-icons/fi'; // Ícones de Voltar, Lixeira, Restaurar
-
-import { db } from '../firebase.cjs';
-import { collection, getDocs, query, orderBy, where, doc, updateDoc } from "firebase/firestore";
+import { FiArrowLeft, FiRefreshCw, FiLoader, FiArchive } from 'react-icons/fi';
+import { db, auth } from '../firebase.js';
+import { collection, getDocs, query, orderBy, where, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 export default function AdminEventosArquivadosPage() {
   const [eventosArquivados, setEventosArquivados] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Função para buscar os eventos arquivados
   async function fetchArchivedEvents() {
+    if (!auth.currentUser) return;
     setIsLoading(true);
     try {
-      const q = query(
-        collection(db, "eventos"), 
-        where("status", "==", "arquivado"), // <-- SÓ PEGA EVENTOS ARQUIVADOS
-        orderBy("dataCriacao", "desc")
-      );
+      const q = query(collection(db, "eventos"), where("userId", "==", auth.currentUser.uid), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
       
-      const querySnapshot = await getDocs(q);
-      const eventosList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setEventosArquivados(eventosList);
-    } catch (error) {
-      console.error("Erro ao buscar eventos arquivados: ", error);
-      alert("Não foi possível carregar os eventos arquivados.");
-    } finally {
-      setIsLoading(false);
-    }
+      const dataHoje = new Date();
+      const limite30Dias = 30 * 24 * 60 * 60 * 1000;
+
+      const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(ev => {
+          const dataCriacao = ev.createdAt?.toDate() || new Date();
+          const diferenca = dataHoje - dataCriacao;
+          // Mostra se foi arquivado MANUALMENTE ou se expirou (30+ dias)
+          return ev.status === 'arquivado' || diferenca >= limite30Dias;
+        });
+
+      setEventosArquivados(lista);
+    } catch (error) { console.error(error); } finally { setIsLoading(false); }
   }
 
-  // Roda a função de busca quando a página carrega
-  useEffect(() => {
-    fetchArchivedEvents();
-  }, []);
+  useEffect(() => { fetchArchivedEvents(); }, []);
 
-  // --- FUNÇÃO PARA RESTAURAR UM EVENTO ---
   async function handleRestoreEvent(evento) {
-    if (!window.confirm(`Tem certeza que deseja restaurar o evento "${evento.nome}"? Ele voltará para a lista principal.`)) {
-      return;
-    }
-
+    if (!window.confirm(`Restaurar "${evento.nome}"? Ele ganhará novos 30 dias.`)) return;
     try {
-      const eventDocRef = doc(db, 'eventos', evento.id);
-      await updateDoc(eventDocRef, {
-        status: 'ativo' // Muda o status de volta para "ativo"
-      });
-      // Remove o evento da lista atual
-      setEventosArquivados((prevEventos) => 
-        prevEventos.filter((e) => e.id !== evento.id)
-      );
-    } catch (err) {
-      console.error("Erro ao restaurar evento: ", err);
-      alert("Não foi possível restaurar o evento.");
-    }
+      await updateDoc(doc(db, 'eventos', evento.id), { status: 'ativo', createdAt: serverTimestamp() });
+      fetchArchivedEvents();
+    } catch (err) { alert("Erro ao restaurar."); }
   }
 
-  // --- FUNÇÃO PARA DELETAR (AVISO) ---
-  function handleDeletePermanently(evento) {
-    alert(
-      `DELEÇÃO PERMANENTE (NÃO IMPLEMENTADO)\n\n` +
-      `Para deletar "${evento.nome}" permanentemente, precisamos de uma Cloud Function do Firebase para:\n` +
-      `1. Deletar todos os arquivos no Storage (pasta ${evento.id}).\n` +
-      `2. Deletar todos os documentos na subcoleção "photos".\n` +
-      `3. Deletar o documento "eventos/${evento.id}".`
-    );
-  }
-
-  if (isLoading) {
-    return <div className="p-4 text-center text-gray-500">Carregando eventos arquivados...</div>;
-  }
+  if (isLoading) return <div className="p-20 text-center"><FiLoader className="animate-spin inline mr-2"/>Carregando...</div>;
 
   return (
-    <div>
-      {/* Botão de Voltar */}
-      <Link 
-        to="/admin/eventos" 
-        className="flex items-center gap-2 text-blue-600 hover:underline mb-4 text-sm"
-      >
-        <FiArrowLeft />
-        Voltar para lista de eventos ativos
-      </Link>
-      
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Eventos Arquivados</h1>
-      <p className="text-gray-600 mb-6">Eventos nesta lista podem ser restaurados ou deletados permanentemente.</p>
-
-      {/* Lista/Tabela de Eventos Arquivados */}
-      <div className="bg-white rounded-lg shadow-lg">
-        <table className="w-full table-auto">
-          <thead className="border-b border-gray-200">
-            <tr>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Nome do Evento</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Fotos</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Ações</th>
-            </tr>
+    <div className="p-4 space-y-6">
+      <Link to="/admin/eventos" className="flex items-center gap-2 text-blue-600 font-bold"><FiArrowLeft /> Voltar</Link>
+      <h1 className="text-3xl font-bold">Arquivo de Eventos</h1>
+      <p className="text-gray-500">Eventos que passaram de 30 dias ou foram arquivados.</p>
+      <div className="bg-white rounded-xl shadow-lg border overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50 border-b">
+            <tr><th className="p-4 font-bold text-xs uppercase text-gray-500">Nome</th><th className="p-4 font-bold text-xs uppercase text-gray-500">Fotos</th><th className="p-4 font-bold text-xs uppercase text-gray-500 text-right">Restaurar</th></tr>
           </thead>
-          <tbody>
-            {eventosArquivados.length === 0 ? (
-              <tr>
-                <td colSpan="3" className="p-4 text-center text-gray-500">
-                  Nenhum evento arquivado encontrado.
+          <tbody className="divide-y">
+            {eventosArquivados.map((evento) => (
+              <tr key={evento.id} className="hover:bg-gray-50">
+                <td className="p-4 font-medium">{evento.nome}</td>
+                <td className="p-4">{evento.fotos || 0}</td>
+                <td className="p-4 text-right">
+                  <button onClick={() => handleRestoreEvent(evento)} className="text-green-600 hover:scale-110 transition-transform"><FiRefreshCw size={20} /></button>
                 </td>
               </tr>
-            ) : (
-              eventosArquivados.map((evento) => (
-                <tr key={evento.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="p-4 text-gray-800 font-medium">{evento.nome}</td>
-                  <td className="p-4 text-gray-600">{evento.fotos}</td>
-                  <td className="p-4 flex items-center gap-3">
-                    {/* Botão Restaurar */}
-                    <button 
-                      onClick={() => handleRestoreEvent(evento)}
-                      className="text-green-600 hover:text-green-800" title="Restaurar Evento"
-                    >
-                      <FiRefreshCw size={18} />
-                    </button>
-                    {/* Botão Deletar Permanente */}
-                    <button 
-                      onClick={() => handleDeletePermanently(evento)}
-                      className="text-red-500 hover:text-red-700" title="Deletar Permanentemente"
-                    >
-                      <FiTrash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
+        {eventosArquivados.length === 0 && <div className="p-10 text-center text-gray-300">Nenhum evento arquivado.</div>}
       </div>
     </div>
   );

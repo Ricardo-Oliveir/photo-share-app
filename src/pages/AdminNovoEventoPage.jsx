@@ -1,155 +1,62 @@
-// src/pages/AdminNovoEventoPage.jsx
-
 import React, { useState } from 'react';
+import { db, auth } from '../firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-// --- IMPORTS ATUALIZADOS DO FIREBASE ---
-import { db, storage } from '../firebase.cjs'; // Importamos o Storage
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Funções do Storage
-import { FiUpload } from 'react-icons/fi';
-
-// Função slugify (sem alteração)
-function slugify(text) {
-  return text.toString().toLowerCase().normalize('NFD').trim()
-    .replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-');
-}
+import { FiSave, FiCheck, FiStar } from 'react-icons/fi';
 
 export default function AdminNovoEventoPage() {
-  const [nomeEvento, setNomeEvento] = useState('');
-  // --- NOVO ESTADO PARA O ARQUIVO DA MOLDURA ---
-  const [frameFile, setFrameFile] = useState(null); // 'frame' = moldura
-  
-  const [isLoading, setIsLoading] = useState(false);
+  const [nome, setNome] = useState('');
+  const [plano, setPlano] = useState('basico');
   const navigate = useNavigate();
 
-  // Função para guardar o arquivo da moldura quando selecionado
-  function handleFrameFileChange(event) {
-    if (event.target.files[0]) {
-      setFrameFile(event.target.files[0]);
-    }
-  }
+  const planosConfig = {
+    basico: { nome: 'Básico', preco: 49.90, limite: 300 },
+    padrao: { nome: 'Padrão', preco: 149.90, limite: 1000 },
+    premium: { nome: 'Premium', preco: 499.90, limite: 999999 }
+  };
 
-  // --- FUNÇÃO DE SUBMIT ATUALIZADA PARA UPLOAD DA MOLDURA ---
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (isLoading) return; 
-    setIsLoading(true);
-
-    const eventoId = slugify(nomeEvento);
-    if (!eventoId) {
-      alert("Por favor, digite um nome de evento válido.");
-      setIsLoading(false);
-      return;
-    }
-
-    let frameURL = null; // Começa como nulo
-
+  async function handleCriar(e) {
+    e.preventDefault();
+    if (!auth.currentUser) return;
     try {
-      // --- PASSO 1: FAZER UPLOAD DA MOLDURA (SE ELA EXISTIR) ---
-      if (frameFile) {
-        console.log("Fazendo upload da moldura...");
-        // Cria uma referência (ex: molduras/festa-vicente.png)
-        const frameRef = ref(storage, `molduras/${eventoId}_${frameFile.name}`);
-        
-        // Faz o upload
-        const uploadResult = await uploadBytes(frameRef, frameFile);
-        
-        // Pega a URL de download
-        frameURL = await getDownloadURL(uploadResult.ref);
-        console.log("Moldura enviada:", frameURL);
-      }
-
-      // --- PASSO 2: SALVAR O EVENTO NO FIRESTORE ---
-      const novoEventoRef = doc(db, "eventos", eventoId);
-      
-      await setDoc(novoEventoRef, {
-        id: eventoId,
-        nome: nomeEvento,
-        dataCriacao: serverTimestamp(),
+      await addDoc(collection(db, "eventos"), {
+        nome,
+        userId: auth.currentUser.uid,
+        status: 'ativo',
+        createdAt: serverTimestamp(),
         fotos: 0,
-        status: "ativo",
-        frameURL: frameURL // <-- SALVA A URL DA MOLDURA (pode ser null)
+        preco: planosConfig[plano].preco,
+        limiteFotos: planosConfig[plano].limite,
+        tipoPlano: planosConfig[plano].nome
       });
-
-      console.log(`Novo evento criado com ID: ${eventoId}`);
       navigate('/admin/eventos');
-
-    } catch (error) {
-      console.error("Erro ao salvar o evento: ", error);
-      alert("Houve um erro ao salvar o evento. Tente novamente.");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (error) { console.error(error); }
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Criar Novo Evento</h1>
-
-      <form 
-        onSubmit={handleSubmit} 
-        className="bg-white p-8 rounded-lg shadow-lg max-w-lg"
-      >
-        {/* Campo Nome do Evento (sem alteração) */}
-        <div className="mb-6">
-          <label htmlFor="nome" className="block text-sm font-medium text-gray-700 mb-1">
-            Nome do Evento
-          </label>
-          <input
-            type="text" id="nome" value={nomeEvento}
-            onChange={(e) => setNomeEvento(e.target.value)}
-            placeholder="Ex: Casamento Ana & Bruno"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required disabled={isLoading} 
-          />
+    <div className="max-w-2xl mx-auto p-4 space-y-8">
+      <h1 className="text-2xl font-black text-slate-800 uppercase italic">Novo Evento</h1>
+      <form onSubmit={handleCriar} className="space-y-6 bg-white p-8 rounded-3xl border shadow-sm">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Evento</label>
+          <input required value={nome} onChange={(e) => setNome(e.target.value)} className="w-full p-4 bg-slate-50 border-2 rounded-2xl outline-none focus:border-blue-600 font-bold" placeholder="Ex: Casamento Ricardo" />
         </div>
-        
-        {/* --- NOVO CAMPO: UPLOAD DA MOLDURA --- */}
-        <div className="mb-6">
-          <label htmlFor="frame-upload" className="block text-sm font-medium text-gray-700 mb-1">
-            Moldura Personalizada (Opcional)
-          </label>
-          <label 
-            htmlFor="frame-upload"
-            className="mt-1 flex justify-center w-full px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:border-blue-500"
-          >
-            <div className="space-y-1 text-center">
-              <FiUpload className="mx-auto h-10 w-10 text-gray-400" />
-              <div className="flex text-sm text-gray-600">
-                <span className="text-blue-600 font-medium cursor-pointer">
-                  {frameFile ? frameFile.name : "Clique para enviar um arquivo"}
-                </span>
-                <input id="frame-upload" name="frame-upload" type="file" className="sr-only" 
-                  accept="image/png" // Aceita apenas PNG
-                  onChange={handleFrameFileChange}
-                  disabled={isLoading}
-                />
-              </div>
-              <p className="text-xs text-gray-500">
-                Envie um .PNG transparente (ex: 1080x1080px)
-              </p>
-            </div>
-          </label>
+        <div className="space-y-4">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Escolha o Plano de Fotos</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.keys(planosConfig).map((key) => (
+              <button key={key} type="button" onClick={() => setPlano(key)} className={`p-4 rounded-2xl border-2 text-left transition-all ${plano === key ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[9px] font-black uppercase text-slate-400">{planosConfig[key].nome}</span>
+                  {plano === key && <FiCheck className="text-blue-600" />}
+                </div>
+                <p className="text-lg font-black text-slate-800">R$ {planosConfig[key].preco.toFixed(2).replace('.', ',')}</p>
+                <p className="text-[9px] text-slate-500 font-bold uppercase">{planosConfig[key].limite > 1000 ? 'Ilimitado' : `${planosConfig[key].limite} fotos`}</p>
+              </button>
+            ))}
+          </div>
         </div>
-        
-        {/* Botões (sem alteração) */}
-        <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50"
-          >
-            {isLoading ? "Salvando..." : "Salvar Evento"}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/admin/eventos')}
-            disabled={isLoading}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-6 rounded-lg disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-        </div>
+        <button type="submit" className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"><FiSave /> Ativar Evento</button>
       </form>
     </div>
   );

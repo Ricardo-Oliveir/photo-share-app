@@ -1,44 +1,46 @@
-// src/pages/AdminClientesPage.jsx
-
-import React from 'react';
-import { FiPlus } from 'react-icons/fi';
-
-// Dados simulados
-const clientesSimulados = [
-  { id: 1, nome: 'Ana e Bruno (Noivos)', email: 'ana.bruno@email.com', eventos: 1 },
-  { id: 2, nome: 'Empresa ACME', email: 'contato@acme.com', eventos: 1 },
-  { id: 3, nome: 'Família Silva (15 Anos)', email: 'familia.silva@email.com', eventos: 1 },
-];
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase.js';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { FiUsers, FiMail, FiLoader } from 'react-icons/fi';
 
 export default function AdminClientesPage() {
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Gerenciar Clientes</h1>
-        <button
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg"
-        >
-          <FiPlus />
-          <span>Novo Cliente</span>
-        </button>
-      </div>
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-      {/* Lista/Tabela de Clientes */}
-      <div className="bg-white rounded-lg shadow-lg">
-        <table className="w-full table-auto">
-          <thead className="border-b border-gray-200">
-            <tr>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Nome do Cliente</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Email</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Eventos</th>
+  useEffect(() => {
+    async function fetchClientes() {
+      try {
+        const snap = await getDocs(collection(db, "usuarios"));
+        setClientes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (e) { console.error(e); } finally { setLoading(false); }
+    }
+    fetchClientes();
+  }, []);
+
+  if (loading) return <div className="p-20 text-center"><FiLoader className="animate-spin" size={32} /></div>;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold flex items-center gap-3"><FiUsers /> Lista de Clientes</h1>
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50 border-b">
+            <tr className="text-xs font-bold uppercase text-gray-500">
+              <th className="p-4">Nome</th>
+              <th className="p-4">E-mail</th>
+              <th className="p-4">Cargo</th>
             </tr>
           </thead>
-          <tbody>
-            {clientesSimulados.map((cliente) => (
-              <tr key={cliente.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="p-4 text-gray-800 font-medium">{cliente.nome}</td>
-                <td className="p-4 text-gray-600">{cliente.email}</td>
-                <td className="p-4 text-gray-600">{cliente.eventos}</td>
+          <tbody className="divide-y">
+            {clientes.map(c => (
+              <tr key={c.id} className="hover:bg-gray-50">
+                <td className="p-4 font-semibold">{c.nome}</td>
+                <td className="p-4 flex items-center gap-2"><FiMail size={14} /> {c.email}</td>
+                <td className="p-4 text-xs">
+                  <span className={`px-2 py-1 rounded-full ${c.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {c.role}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

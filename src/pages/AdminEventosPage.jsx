@@ -1,176 +1,125 @@
-// src/pages/AdminEventosPage.jsx
-
 import React, { useState, useEffect } from 'react';
+import { db, auth } from '../firebase.js';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { FiPlus, FiLoader, FiShare2, FiLayout, FiArchive, FiClock } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
-// --- ESTA É A LINHA CORRIGIDA (Adicionamos o 'FiX') ---
-import { FiPlus, FiCamera, FiLink, FiArchive, FiX } from 'react-icons/fi';
-import { BsQrCode } from 'react-icons/bs';
-
-import { db } from '../firebase.cjs';
-import { collection, getDocs, query, orderBy, where, doc, updateDoc } from "firebase/firestore";
-import { QRCodeSVG } from 'qrcode.react';
 
 export default function AdminEventosPage() {
   const [eventos, setEventos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [modalEvent, setModalEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchEventos() {
+    async function carregarEventos() {
+      if (!auth.currentUser) return;
       try {
         const q = query(
           collection(db, "eventos"), 
-          where("status", "==", "ativo"),
-          orderBy("dataCriacao", "desc")
+          where("userId", "==", auth.currentUser.uid), 
+          orderBy("createdAt", "desc")
         );
+        const snap = await getDocs(q);
         
-        const querySnapshot = await getDocs(q);
-        const eventosList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setEventos(eventosList);
+        const dataHoje = new Date();
+        const limite30DiasMS = 30 * 24 * 60 * 60 * 1000;
+
+        const listaAtivos = snap.docs.map(doc => {
+          const data = doc.data();
+          const dataCriacao = data.createdAt?.toDate() || new Date();
+          const diferencaMS = dataHoje - dataCriacao;
+          
+          // Cálculo dos dias restantes
+          const diasPassados = Math.floor(diferencaMS / (1000 * 60 * 60 * 24));
+          const diasRestantes = 30 - diasPassados;
+
+          return { 
+            id: doc.id, 
+            ...data, 
+            diasRestantes: diasRestantes > 0 ? diasRestantes : 0,
+            expirado: diferencaMS >= limite30DiasMS
+          };
+        }).filter(ev => ev.status !== 'arquivado' && !ev.expirado);
+
+        setEventos(listaAtivos);
       } catch (error) {
-        console.error("Erro ao buscar eventos: ", error);
-        // O alerta de "Não foi possível carregar" que você viu
+        console.error("Erro ao carregar eventos:", error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     }
-    fetchEventos();
+    carregarEventos();
   }, []);
 
-  async function handleArchiveEvent(evento) {
-    if (!window.confirm(`Tem certeza que deseja arquivar o evento "${evento.nome}"? Ele sairá desta lista.`)) {
-      return;
-    }
-    try {
-      const eventDocRef = doc(db, 'eventos', evento.id);
-      await updateDoc(eventDocRef, {
-        status: 'arquivado'
-      });
-      setEventos((prevEventos) => 
-        prevEventos.filter((e) => e.id !== evento.id)
-      );
-    } catch (err) {
-      console.error("Erro ao arquivar evento: ", err);
-      alert("Não foi possível arquivar o evento.");
-    }
-  }
-
-  function handleCopyLink(evento) {
-    const url = `${window.location.origin}/evento/${evento.id}`;
-    navigator.clipboard.writeText(url).then(() => alert(`Link copiado!\n${url}`));
-  }
-  function handleShowQrCode(evento) { setModalEvent(evento); }
-  function handleCloseModal() { setModalEvent(null); }
+  if (loading) return (
+    <div className="flex justify-center items-center h-64">
+      <FiLoader className="animate-spin text-blue-600" size={40} />
+    </div>
+  );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Gerenciar Eventos</h1>
-        <Link
-          to="/admin/eventos/novo" 
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg"
-        >
-          <FiPlus />
-          <span>Criar Novo Evento</span>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Eventos Ativos</h1>
+        <Link to="/admin/eventos/novo" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 shadow-md transition-all">
+          <FiPlus /> Novo Evento
         </Link>
       </div>
 
-      <div className="mb-4">
-        <Link 
-          to="/admin/arquivados" 
-          className="text-sm text-blue-600 hover:underline"
-        >
-          Ver eventos arquivados
-        </Link>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-lg">
-        <table className="w-full table-auto">
-          <thead className="border-b border-gray-200">
-            <tr>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Nome do Evento</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Fotos</th>
-              <th className="text-left text-sm font-semibold text-gray-600 p-4">Ações</th>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr className="text-xs font-bold uppercase text-gray-500">
+              <th className="p-4">Nome do Evento</th>
+              <th className="p-4">Fotos</th>
+              <th className="p-4">Validade</th>
+              <th className="p-4 text-right">Ações</th>
             </tr>
           </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan="3" className="p-4 text-center text-gray-500">Carregando eventos...</td></tr>
-            ) : eventos.length === 0 ? (
-              <tr><td colSpan="3" className="p-4 text-center text-gray-500">Nenhum evento ativo encontrado.</td></tr>
-            ) : (
-              eventos.map((evento) => (
-                <tr key={evento.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="p-4 text-gray-800 font-medium">{evento.nome}</td>
-                  <td className="p-4 text-gray-600">{evento.fotos}</td>
-                  <td className="p-4 flex items-center gap-3">
-                    <Link 
-                      to={`/admin/eventos/galeria/${evento.id}`} 
-                      className="text-blue-600 hover:text-blue-800" title="Ver Galeria"
-                    >
-                      <FiCamera size={18} />
-                    </Link>
-                    <button 
-                      onClick={() => handleCopyLink(evento)} 
-                      className="text-gray-500 hover:text-blue-800" title="Copiar Link do Convidado"
-                    >
-                      <FiLink size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleShowQrCode(evento)} 
-                      className="text-gray-500 hover:text-blue-800" title="Ver QR Code"
-                    >
-                      <BsQrCode size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleArchiveEvent(evento)}
-                      className="text-red-500 hover:text-red-700" title="Arquivar Evento"
-                    >
-                      <FiArchive size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
+          <tbody className="divide-y divide-gray-100">
+            {eventos.map(ev => (
+              <tr key={ev.id} className="hover:bg-gray-50 transition-colors">
+                <td className="p-4 font-semibold text-gray-800">{ev.nome}</td>
+                <td className="p-4 text-gray-600">{ev.fotos || 0} fotos</td>
+                
+                {/* COLUNA DE CONTAGEM DE DIAS */}
+                <td className="p-4">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${ev.diasRestantes <= 5 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                    <FiClock size={12} />
+                    {ev.diasRestantes} {ev.diasRestantes === 1 ? 'dia restante' : 'dias restantes'}
+                  </span>
+                </td>
+
+                <td className="p-4 text-right space-x-4">
+                  <Link to={`/admin/eventos/qrcode/${ev.id}`} className="text-green-600 font-bold hover:underline inline-flex items-center gap-1">
+                    <FiShare2 size={16}/> QR
+                  </Link>
+                  <Link to={`/admin/eventos/galeria/${ev.id}`} className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1">
+                    <FiLayout size={16}/> Painel
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Modal (sem alterações, mas o FiX agora vai funcionar) */}
-      {modalEvent && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
-          onClick={handleCloseModal}
-        >
-          <div 
-            className="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full"
-            onClick={e => e.stopPropagation()} 
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">QR Code do Evento</h2>
-              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
-                <FiX size={24} />
-              </button>
-            </div>
-            <p className="text-gray-600 mb-4">
-              Convidados podem escanear este código para enviar fotos para: <strong className="text-blue-600">{modalEvent.nome}</strong>
-            </p>
-            <div className="flex justify-center p-4 bg-gray-100 rounded-lg mb-4">
-              <QRCodeSVG value={`${window.location.origin}/evento/${modalEvent.id}`} size={256} />
-            </div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Link direto</label>
-            <input
-              type="text" readOnly
-              value={`${window.location.origin}/evento/${modalEvent.id}`}
-              className="w-full p-2 border border-gray-300 rounded bg-gray-50 text-sm"
-              onFocus={(e) => e.target.select()}
-            />
+        
+        {eventos.length === 0 && (
+          <div className="p-20 text-center text-gray-400">
+            <FiArchive className="mx-auto mb-4 opacity-20" size={48} />
+            <p className="text-lg font-medium">Nenhum evento ativo recentemente.</p>
+            <p className="text-sm">Eventos com mais de 30 dias são movidos para o arquivo.</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      
+      {/* Atalho para os Arquivados */}
+      <div className="mt-8 p-6 bg-blue-50 rounded-2xl text-center border border-blue-100">
+        <p className="text-blue-800 text-sm font-medium flex items-center justify-center gap-3">
+          <FiArchive size={18} /> 
+          Histórico completo de eventos antigos? 
+          <Link to="/admin/arquivados" className="font-bold underline hover:text-blue-900 transition-colors">
+            Aceder aos Arquivados
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
