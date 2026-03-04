@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase.js';
-import { collection, query, getDocs, doc, getDoc, orderBy, where } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, orderBy, where, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from 'firebase/auth';
 import { FiCamera, FiImage, FiLoader, FiDatabase, FiDollarSign, FiTrash2, FiTrendingUp, FiPieChart, FiSearch, FiFilter, FiCalendar, FiClock } from "react-icons/fi";
 import { Link } from 'react-router-dom';
@@ -20,12 +20,15 @@ export default function AdminDashboard() {
   const COLORS = ['#3b82f6', '#10b981', '#8b5cf6'];
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubEvents = () => {};
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
+          // 1. CARREGA O SEU PERFIL PRIMEIRO (Resolve o "Olá, !")
           const userSnap = await getDoc(doc(db, "usuarios", user.uid));
           const uData = userSnap.data();
-          setUserData(uData);
+          setUserData(uData); 
           const isAdmin = uData?.role === 'admin';
 
           const usersMap = {};
@@ -34,31 +37,45 @@ export default function AdminDashboard() {
             usersSnap.forEach(d => usersMap[d.id] = d.data().nome);
           }
 
+          // 2. QUERY DE ACESSO
           const q = isAdmin 
             ? query(collection(db, "eventos"), orderBy("createdAt", "desc")) 
             : query(collection(db, "eventos"), where("userId", "==", user.uid));
           
-          const snap = await getDocs(q);
-          const tempLista = [];
-          snap.forEach(d => {
-            const data = d.data();
-            const dataCriacao = data.createdAt?.toDate() || new Date();
-            const hoje = new Date();
-            const diffTime = Math.abs(hoje - dataCriacao);
-            const diasAtivo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          // 3. ATUALIZAÇÃO EM TEMPO REAL (Resolve os números em "0")
+          unsubEvents = onSnapshot(q, (snap) => {
+            const tempLista = [];
+            snap.forEach(d => {
+              const data = d.data();
+              const dataCriacao = data.createdAt?.toDate() || new Date();
+              const hoje = new Date();
+              const diffTime = Math.abs(hoje - dataCriacao);
+              const diasAtivo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            tempLista.push({ 
-              id: d.id, ...data, 
-              dataCriacao, diasAtivo,
-              clienteNome: usersMap[data.userId] || uData.nome,
-              porcentagemUso: Math.min(((data.fotos || 0) / (data.limiteFotos || 300)) * 100, 100)
+              tempLista.push({ 
+                id: d.id, ...data, 
+                dataCriacao, diasAtivo,
+                clienteNome: usersMap[data.userId] || uData.nome,
+                porcentagemUso: Math.min(((data.fotos || 0) / (data.limiteFotos || 300)) * 100, 100)
+              });
             });
+            setTodosEventos(tempLista);
+            setLoading(false); // Só libera a tela quando o seu nome e os dados estiverem prontos
           });
-          setTodosEventos(tempLista);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+
+        } catch (e) { 
+          console.error(e); 
+          setLoading(false); 
+        }
+      } else {
+        setLoading(false);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      unsubEvents();
+    };
   }, []);
 
   const dadosFiltrados = useMemo(() => {
@@ -106,7 +123,6 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8 pb-16 max-w-[1500px] mx-auto p-4">
       
-      {/* HEADER: Botão de Novo Evento Removido */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">
@@ -118,7 +134,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* FILTROS (ADMIN ONLY) */}
       {isAdmin && (
         <div className="bg-white p-4 rounded-[2rem] border shadow-sm flex flex-wrap gap-4 items-center">
           <div className="relative flex-1 min-w-[200px]">
@@ -152,7 +167,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {isAdmin && <StatCard title="Receita Filtrada" value={`R$ ${stats.faturamento.toFixed(2)}`} icon={<FiDollarSign />} color="bg-purple-600" />}
         <StatCard title={isAdmin ? "Fotos Totais" : "Minhas Fotos"} value={stats.fotos} icon={<FiImage />} color="bg-green-500" />
@@ -160,7 +174,6 @@ export default function AdminDashboard() {
         {isAdmin && <StatCard title="Uso Cloud" value={`${stats.armazenamento} GB`} icon={<FiDatabase />} color="bg-orange-500" />}
       </div>
 
-      {/* GRÁFICOS (ADMIN ONLY) */}
       {isAdmin && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border shadow-sm h-[350px]">
@@ -170,7 +183,7 @@ export default function AdminDashboard() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
                 <Tooltip />
-                <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={4} fill="#3b82f6" fillOpacity={0.1} />
+                <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={4} font-bold="true" fill="#3b82f6" fillOpacity={0.1} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -188,7 +201,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* TABELA: SAÚDE DOS EVENTOS */}
       <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
         <div className="p-8 border-b bg-slate-50 flex justify-between items-center">
           <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Saúde dos Eventos</h3>
